@@ -1,6 +1,8 @@
-from . import parallel
-from . import amp
-from . import fp16_utils
+import logging
+import warnings
+
+# May help avoid undefined symbol errors https://pytorch.org/cppdocs/notes/faq.html#undefined-symbol-errors-from-pytorch-aten
+import torch
 
 # For optimizers and normalization there is no Python fallback.
 # Absence of cuda backend is a hard error.
@@ -9,5 +11,31 @@ from . import fp16_utils
 # so they expect those backends to be available, but for some reason they actually aren't
 # available (for example because they built improperly in a way that isn't revealed until
 # load time) the error message is timely and visible.
-from . import optimizers
-from . import normalization
+from . import normalization, optimizers
+
+__all__ = ["normalization", "optimizers"]
+
+
+def check_cudnn_version_and_warn(global_option: str, required_cudnn_version: int) -> bool:
+    cudnn_available = torch.backends.cudnn.is_available()
+    cudnn_version = torch.backends.cudnn.version() if cudnn_available else None
+    if not (cudnn_available and (cudnn_version >= required_cudnn_version)):
+        warnings.warn(
+            f"`{global_option}` depends on cuDNN {required_cudnn_version} or later, "
+            f"but {'cuDNN is not available' if not cudnn_available else cudnn_version}"
+        )
+        return False
+    return True
+
+
+class DeprecatedFeatureWarning(FutureWarning):
+    pass
+
+
+def deprecated_warning(msg: str) -> None:
+    if (
+        not torch.distributed.is_available
+        or not torch.distributed.is_initialized()
+        or (torch.distributed.is_initialized() and torch.distributed.get_rank() == 0)
+    ):
+        warnings.warn(msg, DeprecatedFeatureWarning)

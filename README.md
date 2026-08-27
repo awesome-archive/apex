@@ -1,97 +1,125 @@
 # Introduction
 
-This repository holds NVIDIA-maintained utilities to streamline 
-mixed precision and distributed training in Pytorch. 
+This repository holds NVIDIA-maintained utilities to streamline mixed precision and distributed training in Pytorch.
 Some of the code here will be included in upstream Pytorch eventually.
-The intention of Apex is to make up-to-date utilities available to 
-users as quickly as possible.
+The intent of Apex is to make up-to-date utilities available to users as quickly as possible.
 
-## Full API Documentation: [https://nvidia.github.io/apex](https://nvidia.github.io/apex)
+# Installation
+Each [`apex.contrib`](./apex/contrib) module requires one or more install options other than `--cpp_ext` and `--cuda_ext`.
+Note that contrib modules do not necessarily support stable PyTorch releases, some of them might only be compatible with nightlies.
 
-# Contents
+## Containers
+NVIDIA PyTorch Containers are available on NGC: https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch.
+The containers come with all the custom extensions available at the moment. 
 
-## 1. Amp:  Automatic Mixed Precision
+See [the NGC documentation](https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/index.html) for details such as:
+- how to pull a container
+- how to run a pulled container
+- release notes
 
-`apex.amp` is a tool to enable mixed precision training by changing only 3 lines of your script.
-Users can easily experiment with different pure and mixed precision training modes by supplying
-different flags to `amp.initialize`.
+## From Source
 
-[Webinar introducing Amp](https://info.nvidia.com/webinar-mixed-precision-with-pytorch-reg-page.html)
-(The flag `cast_batchnorm` has been renamed to `keep_batchnorm_fp32`).
+To install Apex from source, we recommend using the nightly Pytorch obtainable from https://github.com/pytorch/pytorch.
 
-[API Documentation](https://nvidia.github.io/apex/amp.html)
+The latest stable release obtainable from https://pytorch.org should also work.
 
-[Comprehensive Imagenet example](https://github.com/NVIDIA/apex/tree/master/examples/imagenet)
-
-[DCGAN example coming soon...](https://github.com/NVIDIA/apex/tree/master/examples/dcgan)
-
-[Moving to the new Amp API](https://nvidia.github.io/apex/amp.html#transition-guide-for-old-api-users) (for users of the deprecated "Amp" and "FP16_Optimizer" APIs)
-
-## 2. Distributed Training
-
-`apex.parallel.DistributedDataParallel` is a module wrapper, similar to 
-`torch.nn.parallel.DistributedDataParallel`.  It enables convenient multiprocess distributed training,
-optimized for NVIDIA's NCCL communication library.
-
-[API Documentation](https://nvidia.github.io/apex/parallel.html)
-
-[Python Source](https://github.com/NVIDIA/apex/tree/master/apex/parallel)
-
-[Example/Walkthrough](https://github.com/NVIDIA/apex/tree/master/examples/distributed)
-
-The [Imagenet example](https://github.com/NVIDIA/apex/tree/master/examples/imagenet)
-shows use of `apex.parallel.DistributedDataParallel` along with `apex.amp`.
-
-### Synchronized Batch Normalization
-
-`apex.parallel.SyncBatchNorm` extends `torch.nn.modules.batchnorm._BatchNorm` to
-support synchronized BN.
-It allreduces stats across processes during multiprocess (DistributedDataParallel) training.
-Synchronous BN has been used in cases where only a small
-local minibatch can fit on each GPU.
-Allreduced stats increase the effective batch size for the BN layer to the
-global batch size across all processes (which, technically, is the correct
-formulation).
-Synchronous BN has been observed to improve converged accuracy in some of our research models.
-
-# Requirements
-
-Python 3
-
-CUDA 9 or newer
-
-PyTorch 0.4 or newer.  The CUDA and C++ extensions require pytorch 1.0 or newer.
-
-We recommend the latest stable release, obtainable from
-[https://pytorch.org/](https://pytorch.org/).  We also test against the latest master branch, obtainable from [https://github.com/pytorch/pytorch](https://github.com/pytorch/pytorch).
-
-It's often convenient to use Apex in Docker containers.  Compatible options include:
-* [NVIDIA Pytorch containers from NGC](https://ngc.nvidia.com/catalog/containers/nvidia%2Fpytorch), which come with Apex preinstalled.  To use the latest Amp API, you may need to `pip uninstall apex` then reinstall Apex using the **Quick Start** commands below.
-* [official Pytorch -devel Dockerfiles](https://hub.docker.com/r/pytorch/pytorch/tags), e.g. `docker pull pytorch/pytorch:nightly-devel-cuda10.0-cudnn7`, in which you can install Apex using the **Quick Start** commands.
-
-# Quick Start
+We recommend installing [`Ninja`](https://ninja-build.org/) to make compilation faster.
 
 ### Linux
 
-For performance and full functionality, we recommend installing Apex with
-CUDA and C++ extensions via
-```
-$ git clone apex
-$ cd apex
-$ pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
+For performance and full functionality, we recommend installing Apex with CUDA and C++ extensions using environment variables:
+
+#### Using Environment Variables (Recommended)
+
+```bash
+git clone https://github.com/NVIDIA/apex
+cd apex
+# Build with core extensions (cpp and cuda)
+APEX_CPP_EXT=1 APEX_CUDA_EXT=1 pip install -v --no-build-isolation .
+
+# To build with additional extensions, specify them with environment variables
+APEX_CPP_EXT=1 APEX_CUDA_EXT=1 APEX_FUSED_CONV_BIAS_RELU=1 pip install -v --no-build-isolation .
+
+# To build all contrib extensions at once
+APEX_CPP_EXT=1 APEX_CUDA_EXT=1 APEX_ALL_CONTRIB_EXT=1 pip install -v --no-build-isolation .
 ```
 
-Apex also supports a Python-only build (required with Pytorch 0.4) via
+To reduce the build time, parallel building can be enabled:
+
+```bash
+NVCC_APPEND_FLAGS="--threads 4" APEX_PARALLEL_BUILD=8 APEX_CPP_EXT=1 APEX_CUDA_EXT=1 pip install -v --no-build-isolation .
 ```
-$ pip install -v --no-cache-dir .
+
+When CPU cores or memory are limited, the `--parallel` option is generally preferred over `--threads`. See [pull#1882](https://github.com/NVIDIA/apex/pull/1882) for more details.
+
+#### Using Command-Line Flags (Legacy Method)
+
+The traditional command-line flags are still supported:
+
+```bash
+# Using pip config-settings (pip >= 23.1)
+pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" ./
+
+# For older pip versions
+pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+
+# To build with additional extensions
+pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --global-option="--cpp_ext" --global-option="--cuda_ext" --global-option="--group_norm" ./
+```
+
+#### Python-Only Build
+
+APEX also supports a Python-only build via:
+```bash
+pip install -v --disable-pip-version-check --no-build-isolation --no-cache-dir ./
 ```
 A Python-only build omits:
 - Fused kernels required to use `apex.optimizers.FusedAdam`.
-- Fused kernels required to use `apex.normalization.FusedLayerNorm`.
+- Fused kernels required to use `apex.normalization.FusedLayerNorm` and `apex.normalization.FusedRMSNorm`.
 - Fused kernels that improve the performance and numerical stability of `apex.parallel.SyncBatchNorm`.
 - Fused kernels that improve the performance of `apex.parallel.DistributedDataParallel` and `apex.amp`.
 `DistributedDataParallel`, `amp`, and `SyncBatchNorm` will still be usable, but they may be slower.
 
-### Windows support
-Windows support is experimental, and Linux is recommended.  `pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .` may work if you were able to build Pytorch from source
-on your system.  `pip install -v --no-cache-dir .` (without CUDA/C++ extensions) is more likely to work.  If you installed Pytorch in a Conda environment, make sure to install Apex in that same environment.
+
+### [Experimental] Windows
+`pip install -v --disable-pip-version-check --no-cache-dir --no-build-isolation --config-settings "--build-option=--cpp_ext" --config-settings "--build-option=--cuda_ext" .` may work if you were able to build Pytorch from source
+on your system. A Python-only build via `pip install -v --no-cache-dir .` is more likely to work.  
+If you installed Pytorch in a Conda environment, make sure to install Apex in that same environment.
+
+
+## Custom C++/CUDA Extensions and Install Options
+
+If a requirement of a module is not met, then it will not be built.
+
+|  Module Name  |  Environment Variable  |  Install Option  |  Misc  |
+|---------------|------------------------|------------------|--------|
+|  `apex_C`     |  `APEX_CPP_EXT=1`      |  `--cpp_ext`     | |
+|  `amp_C`      |  `APEX_CUDA_EXT=1`     |  `--cuda_ext`    | |
+|  `syncbn`     |  `APEX_CUDA_EXT=1`     |  `--cuda_ext`    | |
+|  `fused_layer_norm_cuda`  |  `APEX_CUDA_EXT=1`  |  `--cuda_ext`  | [`apex.normalization`](./apex/normalization) |
+|  `mlp_cuda`   |  `APEX_CUDA_EXT=1`     |  `--cuda_ext`    | |
+|  `scaled_upper_triang_masked_softmax_cuda`  |  `APEX_CUDA_EXT=1`  |  `--cuda_ext`  | |
+|  `generic_scaled_masked_softmax_cuda`  |  `APEX_CUDA_EXT=1`  |  `--cuda_ext`  | |
+|  `scaled_masked_softmax_cuda`  |  `APEX_CUDA_EXT=1`  |  `--cuda_ext`  | |
+|  `fused_weight_gradient_mlp_cuda`  |  `APEX_CUDA_EXT=1`  |  `--cuda_ext`  | Requires CUDA>=11 |
+|  `permutation_search_cuda`  |  `APEX_PERMUTATION_SEARCH=1`  |  `--permutation_search`  | [`apex.contrib.sparsity`](./apex/contrib/sparsity)  |
+|  `bnp`        |  `APEX_BNP=1`          |  `--bnp`         |  [`apex.contrib.groupbn`](./apex/contrib/groupbn) |
+|  `xentropy`   |  `APEX_XENTROPY=1`     |  `--xentropy`    |  [`apex.contrib.xentropy`](./apex/contrib/xentropy)  |
+|  `focal_loss_cuda`  |  `APEX_FOCAL_LOSS=1`  |  `--focal_loss`  |  [`apex.contrib.focal_loss`](./apex/contrib/focal_loss)  |
+|  `fused_index_mul_2d`  |  `APEX_INDEX_MUL_2D=1`  |  `--index_mul_2d`  |  [`apex.contrib.index_mul_2d`](./apex/contrib/index_mul_2d)  |
+|  `fused_adam_cuda`  |  `APEX_DEPRECATED_FUSED_ADAM=1`  |  `--deprecated_fused_adam`  |  [`apex.contrib.optimizers`](./apex/contrib/optimizers)  |
+|  `fused_lamb_cuda`  |  `APEX_DEPRECATED_FUSED_LAMB=1`  |  `--deprecated_fused_lamb`  |  [`apex.contrib.optimizers`](./apex/contrib/optimizers)  |
+|  `fast_layer_norm`  |  `APEX_FAST_LAYER_NORM=1`  |  `--fast_layer_norm`  |  [`apex.contrib.layer_norm`](./apex/contrib/layer_norm). different from `fused_layer_norm` |
+|  `transducer_joint_cuda`  |  `APEX_TRANSDUCER=1`  |  `--transducer`  |  [`apex.contrib.transducer`](./apex/contrib/transducer)  |
+|  `transducer_loss_cuda`   |  `APEX_TRANSDUCER=1`  |  `--transducer`  |  [`apex.contrib.transducer`](./apex/contrib/transducer)  |
+|  `cudnn_gbn_lib`  |  `APEX_CUDNN_GBN=1`  |  `--cudnn_gbn`  | Requires cuDNN>=8.5, [`apex.contrib.cudnn_gbn`](./apex/contrib/cudnn_gbn) |
+|  `peer_memory_cuda`  |  `APEX_PEER_MEMORY=1`  |  `--peer_memory`  |  [`apex.contrib.peer_memory`](./apex/contrib/peer_memory)  |
+|  `nccl_p2p_cuda`  |  `APEX_NCCL_P2P=1`  |  `--nccl_p2p`  | Requires NCCL >= 2.10, [`apex.contrib.nccl_p2p`](./apex/contrib/nccl_p2p)  |
+|  `fast_bottleneck`  |  `APEX_FAST_BOTTLENECK=1`  |  `--fast_bottleneck`  |  Requires `peer_memory_cuda` and `nccl_p2p_cuda`, [`apex.contrib.bottleneck`](./apex/contrib/bottleneck) |
+|  `fused_conv_bias_relu`  |  `APEX_FUSED_CONV_BIAS_RELU=1`  |  `--fused_conv_bias_relu`  | Requires cuDNN>=8.4, [`apex.contrib.conv_bias_relu`](./apex/contrib/conv_bias_relu) |
+|  `distributed_adam_cuda`  |  `APEX_DISTRIBUTED_ADAM=1`  |  `--distributed_adam`  |  [`apex.contrib.optimizers`](./apex/contrib/optimizers)  |
+|  `distributed_lamb_cuda`  |  `APEX_DISTRIBUTED_LAMB=1`  |  `--distributed_lamb`  |  [`apex.contrib.optimizers`](./apex/contrib/optimizers)  |
+|  `_apex_nccl_allocator`  |  `APEX_NCCL_ALLOCATOR=1`  |  `--nccl_allocator`  | Requires NCCL >= 2.19, [`apex.contrib.nccl_allocator`](./apex/contrib/nccl_allocator)  |
+|  `_apex_gpu_direct_storage`  |  `APEX_GPU_DIRECT_STORAGE=1`  |  `--gpu_direct_storage`  |  [`apex.contrib.gpu_direct_storage`](./apex/contrib/gpu_direct_storage)  |
+
+You can also build all contrib extensions at once by setting `APEX_ALL_CONTRIB_EXT=1`.
